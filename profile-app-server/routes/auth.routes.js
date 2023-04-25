@@ -1,8 +1,12 @@
 const User = require('../models/User.model');
 const mongoose = require('mongoose');
 const router = require('express').Router();
+const jwt = require('jsonwebtoken');
+
 const bcrypt = require('bcrypt');
 const saltRounds = 10;
+
+const { isAuthenticated } = require('../middleware/jwt.middleware');
 
 router.post('/signup', async (req, res, next) => {
   const { username, password, campus, course } = req.body;
@@ -66,13 +70,49 @@ router.post('/signup', async (req, res, next) => {
 });
 
 router.post('/login', async (req, res, next) => {
+  const { username, password } = req.body;
+
   try {
-  } catch (error) {}
+    if (password === '' || username === '') {
+      res.status(400).json({ message: 'Provide password and username' });
+      return;
+    }
+
+    const foundUser = await User.findOne({ username });
+
+    if (!foundUser) {
+      res.status(400).json({ message: 'User not found.' });
+      return;
+    }
+
+    const passwordCorrect = bcrypt.compareSync(password, foundUser.password);
+
+    if (passwordCorrect) {
+      const { _id, username } = foundUser;
+      const payload = { _id, username };
+
+      const authToken = jwt.sign(payload, process.env.TOKEN_SECRET, {
+        algorithm: 'HS256',
+        expiresIn: '6h',
+      });
+
+      res.status(200).json({ authToken });
+    } else {
+      res.status(401).json({ message: 'Unable to authenticate the user' });
+    }
+  } catch (error) {
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
 });
 
-router.get('/verify', async (req, res, next) => {
+router.get('/verify', isAuthenticated, async (req, res, next) => {
   try {
-  } catch (error) {}
+    console.log(`req.payload`, req.payload);
+
+    res.status(200).json(req.payload);
+  } catch (error) {
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
 });
 
 module.exports = router;
